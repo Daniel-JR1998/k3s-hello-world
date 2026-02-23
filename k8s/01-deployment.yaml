@@ -1,0 +1,85 @@
+---
+# =============================================================================
+# Deployment: hello-world-nginx
+# Serves a static "Hello World" page via Nginx
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-world-nginx
+  namespace: hello-world
+  labels:
+    app: hello-world-nginx
+    version: "1.0"
+    app.kubernetes.io/name: hello-world-nginx
+    app.kubernetes.io/managed-by: github-actions
+spec:
+  replicas: 2                  # 2 replicas for basic HA
+  selector:
+    matchLabels:
+      app: hello-world-nginx
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: hello-world-nginx
+        version: "1.0"
+    spec:
+      # Run as non-root
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+
+      containers:
+        - name: nginx
+          # IMAGE is replaced by the CI/CD pipeline using envsubst
+          image: ${DOCKER_IMAGE}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          # Resource limits — tune for your cluster
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+          # Liveness probe — restart if Nginx hangs
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+
+          # Readiness probe — only send traffic to ready pods
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 2
+
+          # Container security hardening
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # Nginx writes temp files
+            capabilities:
+              drop:
+                - ALL
+
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30

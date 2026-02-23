@@ -1,0 +1,25 @@
+# Kubernetes
+*.kubeconfig
+kubeconfig
+.kube/
+
+# Ansible
+*.retry
+ansible/vault_pass.txt
+ansible/.vault_pass
+
+# Secrets
+*.pem
+*.key
+*.env
+.env*
+secrets/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
