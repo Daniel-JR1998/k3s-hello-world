@@ -1,186 +1,32 @@
 ---
-# =============================================================================
-# Ansible Playbook: Install k3s Single-Node Cluster
-# Usage: ansible-playbook -i inventory.ini install-k3s.yml
-# =============================================================================
-
-- name: Install k3s on Linux machine
+- name: Install k3s single-node cluster
   hosts: k3s_server
   become: true
-  gather_facts: true
-
-  vars:
-    k3s_version: "latest"
-    k3s_install_dir: /usr/local/bin
-    kubeconfig_path: /etc/rancher/k3s/k3s.yaml
-
-  pre_tasks:
-    - name: Ensure supported OS
-      ansible.builtin.assert:
-        that:
-          - ansible_os_family in ["Debian", "RedHat"]
-        fail_msg: "Unsupported OS family: {{ ansible_os_family }}"
-
-    - name: Update apt cache (Debian/Ubuntu)
-      ansible.builtin.apt:
-        update_cache: true
-        cache_valid_time: 3600
-      when: ansible_os_family == "Debian"
-
-    - name: Update yum cache (RedHat/CentOS)
-      ansible.builtin.yum:
-        update_cache: true
-      when: ansible_os_family == "RedHat"
 
   tasks:
-    # -------------------------------------------------------------------------
-    # Dependencies
-    # -------------------------------------------------------------------------
-    - name: Install required packages (Debian/Ubuntu)
+    - name: Install dependencies
       ansible.builtin.apt:
-        name:
-          - curl
-          - wget
-          - git
-          - ca-certificates
-          - gnupg
-          - lsb-release
+        name: [curl, wget, git]
         state: present
-      when: ansible_os_family == "Debian"
+        update_cache: true
 
-    - name: Install required packages (RedHat/CentOS)
-      ansible.builtin.yum:
-        name:
-          - curl
-          - wget
-          - git
-          - ca-certificates
-        state: present
-      when: ansible_os_family == "RedHat"
-
-    # -------------------------------------------------------------------------
-    # Disable swap (required for Kubernetes)
-    # -------------------------------------------------------------------------
-    - name: Disable swap immediately
+    - name: Disable swap
       ansible.builtin.command: swapoff -a
       changed_when: false
 
-    - name: Disable swap permanently in /etc/fstab
-      ansible.builtin.replace:
-        path: /etc/fstab
-        regexp: '^([^#].*\s+swap\s+.*)$'
-        replace: '# \1'
+    - name: Download and install k3s
+      ansible.builtin.shell: curl -sfL https://get.k3s.io | sh -
+      args:
+        creates: /usr/local/bin/k3s
 
-    # -------------------------------------------------------------------------
-    # Kernel modules
-    # -------------------------------------------------------------------------
-    - name: Load required kernel modules
-      community.general.modprobe:
-        name: "{{ item }}"
-        state: present
-      loop:
-        - overlay
-        - br_netfilter
-
-    - name: Persist kernel modules
-      ansible.builtin.copy:
-        dest: /etc/modules-load.d/k3s.conf
-        content: |
-          overlay
-          br_netfilter
-        mode: "0644"
-
-    - name: Set sysctl parameters for networking
-      ansible.posix.sysctl:
-        name: "{{ item.key }}"
-        value: "{{ item.value }}"
-        sysctl_set: true
-        state: present
-        reload: true
-      loop:
-        - { key: net.bridge.bridge-nf-call-iptables, value: "1" }
-        - { key: net.bridge.bridge-nf-call-ip6tables, value: "1" }
-        - { key: net.ipv4.ip_forward, value: "1" }
-
-    # -------------------------------------------------------------------------
-    # Install k3s
-    # -------------------------------------------------------------------------
-    - name: Download k3s install script
-      ansible.builtin.get_url:
-        url: https://get.k3s.io
-        dest: /tmp/k3s-install.sh
-        mode: "0755"
-
-    - name: Install k3s (latest stable)
-      ansible.builtin.shell:
-        cmd: /tmp/k3s-install.sh
-      environment:
-        INSTALL_K3S_VERSION: "{{ k3s_version }}"
-        INSTALL_K3S_EXEC: "server --disable=traefik"  # we'll use NodePort; remove if you want Traefik
-      register: k3s_install_result
-      changed_when: "'k3s' in k3s_install_result.stdout"
-
-    # -------------------------------------------------------------------------
-    # Verify & enable service
-    # -------------------------------------------------------------------------
-    - name: Ensure k3s service is enabled and started
-      ansible.builtin.systemd:
-        name: k3s
-        enabled: true
-        state: started
-
-    - name: Wait for k3s API server to become ready
+    - name: Wait for k3s to be ready
       ansible.builtin.wait_for:
         host: 127.0.0.1
         port: 6443
         timeout: 120
 
-    - name: Wait for node to be Ready
-      ansible.builtin.command: >
-        k3s kubectl wait node --all
-        --for=condition=Ready
-        --timeout=120s
-      register: node_ready
-      retries: 5
-      delay: 10
-      until: node_ready.rc == 0
-      changed_when: false
-
-    # -------------------------------------------------------------------------
-    # Expose kubeconfig for local use
-    # -------------------------------------------------------------------------
-    - name: Create ~/.kube directory for the remote user
-      ansible.builtin.file:
-        path: "{{ ansible_env.HOME }}/.kube"
-        state: directory
-        mode: "0700"
-
-    - name: Copy kubeconfig to user home
-      ansible.builtin.copy:
-        src: "{{ kubeconfig_path }}"
-        dest: "{{ ansible_env.HOME }}/.kube/config"
-        remote_src: true
-        owner: "{{ ansible_user_id }}"
-        mode: "0600"
-
-    - name: Set KUBECONFIG in shell profile
-      ansible.builtin.lineinfile:
-        path: "{{ ansible_env.HOME }}/.bashrc"
-        line: 'export KUBECONFIG=$HOME/.kube/config'
-        state: present
-
-  post_tasks:
-    - name: Display cluster info
-      ansible.builtin.command: k3s kubectl cluster-info
-      register: cluster_info
-      changed_when: false
-
-    - name: Show cluster info
-      ansible.builtin.debug:
-        msg: "{{ cluster_info.stdout_lines }}"
-
-    - name: Display node status
-      ansible.builtin.command: k3s kubectl get nodes -o wide
+    - name: Verify node is Ready
+      ansible.builtin.command: k3s kubectl get nodes
       register: nodes
       changed_when: false
 
