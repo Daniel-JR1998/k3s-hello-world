@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Hello World – k3s Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+    }
+    .card {
+      text-align: center;
+      padding: 3rem 4rem;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+    }
+    h1 { font-size: 3.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .subtitle { font-size: 1.2rem; opacity: 0.7; margin-bottom: 2rem; }
+    .badge {
+      display: inline-block;
+      padding: 0.4rem 1rem;
+      background: #e94560;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+    .info { margin-top: 2rem; font-size: 0.9rem; opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Hello World!</h1>
+    <p class="subtitle">Deployed on k3s via GitHub Actions CI/CD</p>
+    <span class="badge">🚀 Nginx on Kubernetes</span>
+    <p class="info">Pod: <span id="host"></span></p>
+  </div>
+  <script>
+    // Shows the pod hostname if available via server-side injection,
+    // otherwise leaves it blank — purely cosmetic.
+    document.getElementById('host').textContent = window.location.hostname;
+  </script>
+</body>
+</html>
